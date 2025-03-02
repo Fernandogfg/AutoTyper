@@ -1,15 +1,13 @@
 package autoTyper;
 
 import java.awt.AWTException;
-import java.awt.BorderLayout;
-import java.awt.Dimension;
+import java.awt.Font;
 import java.awt.GridLayout;
 import java.awt.Robot;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.KeyEvent;
 
-import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
@@ -31,48 +29,73 @@ import com.github.kwhat.jnativehook.keyboard.NativeKeyListener;
 -Evitar que caso a hotkey seja pressinada durante a simulação ela acione novamente o script
 -Adicionar logo
 */
-
 public class AutoTyper implements ActionListener, NativeKeyListener {
-	private JLabel label;
 	private JFrame frame;
-	private JPanel panel;
-	private JTextField keyCamp;
-	private String message;
+
+	private JPanel titlePanel;
+	private JLabel titleLabel;
+
+	private JPanel keyPanel;
+	private JLabel keyLabel;
+	private JTextField keyTextField;
+
+	private JPanel messagePanel;
 	private JLabel messageLabel;
-	private JTextField messageCamp;
-	@SuppressWarnings("unused")
-	private boolean listening = false;
+	private JTextField messageTextField;
+	private String message;
+
+	private JPanel optPanel;
+	private JButton helpBtn;
+	private JButton doneBtn;
+
+	private boolean typing = false;
 	private String configuredKey;
 	private int interval = 100;
 
 	public AutoTyper() {
 
-		// Configurando elementos
+		// Configurando Frame
 		frame = new JFrame();
-		label = new JLabel("Digite a tecla que será usada para ativação.");
-		messageLabel = new JLabel("Digite a mensagem que vai ser enviada");
-		JButton button = new JButton("Configurar");
-		keyCamp = new JTextField();
-		keyCamp.setPreferredSize(new Dimension(10, 2));
-		messageCamp = new JTextField();
-
-		button.addActionListener(this);
-
-		panel = new JPanel();
-		panel.setBorder(BorderFactory.createEmptyBorder(100, 100, 100, 100));
-		panel.setLayout(new GridLayout(0, 1));
-
-		// Adicionando elementos no painel.
-		panel.add(label);
-		panel.add(keyCamp);
-		panel.add(messageLabel);
-		panel.add(messageCamp);
-		panel.add(button);
-
-		// Configurando o Frame
-		frame.add(panel, BorderLayout.CENTER);
+		frame.setLayout(new GridLayout(4, 1));
 		frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		frame.setTitle("AutoTyper");
+
+		// Configurando Titulo
+		titlePanel = new JPanel();
+		titleLabel = new JLabel("AutoTyper!");
+		titleLabel.setFont(new Font("Serif", Font.BOLD, 15));
+		titlePanel.add(titleLabel);
+
+		// Configurando painel principal
+		// painel de Adição de chave
+		keyPanel = new JPanel(new GridLayout(1, 2));
+		keyLabel = new JLabel("Key: ");
+		keyTextField = new JTextField(1);
+		keyPanel.add(keyLabel);
+		keyPanel.add(keyTextField);
+
+		// painel de adição da mensagem
+		messagePanel = new JPanel(new GridLayout(1, 2));
+		messageLabel = new JLabel("Mensagem: ");
+		messageTextField = new JTextField();
+		messagePanel.add(messageLabel);
+		messagePanel.add(messageTextField);
+
+		// Configurando painel de opções
+		optPanel = new JPanel(new GridLayout(1, 2));
+		helpBtn = new JButton("ajuda");
+		doneBtn = new JButton("feito");
+		optPanel.add(helpBtn);
+		optPanel.add(doneBtn);
+
+		// Configurando botão de "pronto"
+		doneBtn.addActionListener(this);
+
+		// Adicionando elementos ao Frame
+		frame.add(titlePanel);
+		frame.add(keyPanel);
+		frame.add(messagePanel);
+		frame.add(optPanel);
 		frame.pack();
 		frame.setVisible(true);
 
@@ -84,45 +107,48 @@ public class AutoTyper implements ActionListener, NativeKeyListener {
 
 	@Override
 	public void actionPerformed(ActionEvent e) {
-		label.setText("Configurado");
-		message = messageCamp.getText();
-		if ((keyCamp.getText()).length() > 1 || (messageCamp.getText()).length() == 0) {
-			JOptionPane.showMessageDialog(frame, "Preencha os campos corretamente!");
-		} else {
-			configuredKey = keyCamp.getText();
-			message = messageCamp.getText();
+		if (e.getSource() == doneBtn
+				&& ((keyTextField.getText()).length() == 1 && (messageTextField.getText()).length() > 0)) {
+			configuredKey = keyTextField.getText();
+			message = messageTextField.getText();
 			try {
 				GlobalScreen.registerNativeHook();
 				GlobalScreen.addNativeKeyListener(this);
-				listening = true;
+
 			} catch (NativeHookException ex) {
 				System.err.println("Erro ao registrar o Native Hook.");
 				ex.printStackTrace();
 			}
+		} else {
+			JOptionPane.showMessageDialog(frame, "Preencha os campos corretamente!");
 		}
-
 		System.out.println("A mensagem gravada foi: " + message);
 	}
+
 	@Override
 	public void nativeKeyPressed(NativeKeyEvent e) {
-		String teclaPressionada = NativeKeyEvent.getKeyText(e.getKeyCode());
-		System.out.println("Tecla Pressionada: " + teclaPressionada);
+		String pressedKey = NativeKeyEvent.getKeyText(e.getKeyCode());
+		System.out.println("Tecla Pressionada: " + pressedKey);
 
-		if (teclaPressionada.equalsIgnoreCase(configuredKey)) {
-			try {
-				Robot robot = new Robot();
-				for (char c : message.toCharArray()) {
-					int keyCode = KeyEvent.getExtendedKeyCodeForChar(c);
-					if (keyCode != KeyEvent.VK_UNDEFINED) {
-						robot.keyPress(keyCode);
-						robot.keyRelease(keyCode);
+		if (pressedKey.equalsIgnoreCase(configuredKey) && !typing) {
+			typing = true;
+			new Thread(() -> {
+				try {
+					Robot robot = new Robot();
+					for (char c : message.toCharArray()) {
+						int keyCode = KeyEvent.getExtendedKeyCodeForChar(c);
+						if (keyCode != KeyEvent.VK_UNDEFINED) {
+							robot.keyPress(keyCode);
+							robot.keyRelease(keyCode);
+						}
+						Thread.sleep((int) (interval * Math.random()));
 					}
-					Thread.sleep( (int)(interval * Math.random()));
-					
+				} catch (AWTException | InterruptedException ex) {
+					ex.printStackTrace();
+				} finally {
+					typing = false;
 				}
-			} catch (AWTException | InterruptedException ex) {
-				ex.printStackTrace();
-			}
+			}).start();
 		}
 	}
 
